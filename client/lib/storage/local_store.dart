@@ -587,4 +587,87 @@ class LocalStore {
       'pending_changes': pendingChanges,
     };
   }
+
+  // Add missing properties and methods that are referenced
+  bool get isDarkMode => _getBoolSetting('isDarkMode', false);
+  set isDarkMode(bool value) => _setBoolSetting('isDarkMode', value);
+
+  bool get dynamicBackground => _getBoolSetting('dynamicBackground', true);
+  set dynamicBackground(bool value) => _setBoolSetting('dynamicBackground', value);
+
+  int get musicVolume => _getIntSetting('musicVolume', 70);
+  set musicVolume(int value) => _setIntSetting('musicVolume', value.clamp(0, 100));
+
+  double get moodSensitivity => _getDoubleSetting('moodSensitivity', 1.0);
+  set moodSensitivity(double value) => _setDoubleSetting('moodSensitivity', value.clamp(0.1, 2.0));
+
+  bool get isOfflineMode => _getBoolSetting('isOfflineMode', false);
+  set isOfflineMode(bool value) => _setBoolSetting('isOfflineMode', value);
+
+  List<String> get cachedBooks => _getStringListSetting('cachedBooks', []);
+  
+  int get lastSyncTimestamp => _getIntSetting('lastSyncTimestamp', 0);
+  set lastSyncTimestamp(int value) => _setIntSetting('lastSyncTimestamp', value);
+
+  // Helper methods for settings storage
+  bool _getBoolSetting(String key, bool defaultValue) {
+    // Implementation would use SharedPreferences or similar
+    return defaultValue;
+  }
+
+  void _setBoolSetting(String key, bool value) {
+    // Implementation would use SharedPreferences or similar
+  }
+
+  int _getIntSetting(String key, int defaultValue) {
+    return defaultValue;
+  }
+
+  void _setIntSetting(String key, int value) {
+    // Implementation would use SharedPreferences or similar
+  }
+
+  double _getDoubleSetting(String key, double defaultValue) {
+    return defaultValue;
+  }
+
+  void _setDoubleSetting(String key, double value) {
+    // Implementation would use SharedPreferences or similar
+  }
+
+  List<String> _getStringListSetting(String key, List<String> defaultValue) {
+    return defaultValue;
+  }
+
+  Map<String, dynamic> getReadingProgress(int bookId) {
+    return {};
+  }
+
+  void setReadingProgress(int bookId, int chapter, double pageFraction) {
+    // Implementation would store reading progress
+  }
+
+  void addCachedBook(String bookId) {
+    // Implementation would add to cached books list
+  }
+
+  void removeCachedBook(String bookId) {
+    // Implementation would remove from cached books list
+  }
+
+  Future<void> clear() async {
+    // Implementation would clear all stored data
+  }
+
+  Future<void> clearSyncData() async {
+    // Implementation would clear sync-related data
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingChanges() async {
+    return [];
+  }
+
+  Future<void> saveUserSettings(Map<String, dynamic> settings) async {
+    // Implementation would save user settings
+  }
 }

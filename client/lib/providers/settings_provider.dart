@@ -3,10 +3,10 @@ import 'package:logger/logger.dart';
 import '../storage/local_store.dart';
 
 class SettingsProvider extends ChangeNotifier {
-  final LocalStore _localStore;
+  final LocalStore _localStore = LocalStore();
   final Logger _logger = Logger();
 
-  SettingsProvider(this._localStore);
+  SettingsProvider();
 
   // Theme settings
   bool get isDarkMode => _localStore.isDarkMode;

@@ -4,7 +4,7 @@ import '../models/sync.dart';
 import '../storage/secure_store.dart';
 
 class SyncApi {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = 'http://localhost:3000/api';
   final SecureStore _secureStore = SecureStore();
 
   Future<Map<String, String>> _getHeaders() async {

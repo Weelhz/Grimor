@@ -74,7 +74,7 @@ export const updateUser = async (id: string, userData: UpdateUserData): Promise<
   Object.entries(userData).forEach(([key, value]) => {
     if (value !== undefined) {
       setClause.push(`${key} = $${paramIndex}`);
-      values.push(value);
+      values.push(typeof value === 'object' ? JSON.stringify(value) : value);
       paramIndex++;
     }
   });

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../utils/file_utils.dart';
+import 'dart:convert';
 
 class FileService {
   static FileService? _instance;
@@ -12,9 +13,12 @@ class FileService {
   late String _appDocumentsPath;
   late String _appCachePath;
   late String _appTempPath;
+  bool _initialized = false;
 
   // Initialize the file service
   Future<void> initialize() async {
+    if (_initialized) return;
+    
     final documentsDir = await getApplicationDocumentsDirectory();
     final cacheDir = await getApplicationCacheDirectory();
     final tempDir = await getTemporaryDirectory();
@@ -25,6 +29,7 @@ class FileService {
     
     // Create necessary directories
     await _createDirectories();
+    _initialized = true;
   }
 
   // Create app-specific directories
@@ -55,6 +60,7 @@ class FileService {
 
   // Book file operations
   Future<File> saveBookFile(File sourceFile, String bookId) async {
+    await _ensureInitialized();
     final booksDir = getBooksDirectory();
     final extension = FileUtils.getFileExtension(sourceFile.path);
     final filename = 'book_${bookId}$extension';
@@ -64,6 +70,7 @@ class FileService {
   }
 
   Future<File?> getBookFile(String bookId) async {
+    await _ensureInitialized();
     final booksDir = getBooksDirectory();
     final supportedExtensions = FileUtils.supportedBookFormats;
     
@@ -79,6 +86,7 @@ class FileService {
   }
 
   Future<void> deleteBookFile(String bookId) async {
+    await _ensureInitialized();
     final file = await getBookFile(bookId);
     if (file != null) {
       await file.delete();
@@ -87,6 +95,7 @@ class FileService {
 
   // Music file operations
   Future<File> saveMusicFile(File sourceFile, String musicId) async {
+    await _ensureInitialized();
     final musicDir = getMusicDirectory();
     final extension = FileUtils.getFileExtension(sourceFile.path);
     final filename = 'music_${musicId}$extension';
@@ -96,6 +105,7 @@ class FileService {
   }
 
   Future<File?> getMusicFile(String musicId) async {
+    await _ensureInitialized();
     final musicDir = getMusicDirectory();
     final supportedExtensions = FileUtils.supportedMusicFormats;
     
@@ -111,6 +121,7 @@ class FileService {
   }
 
   Future<void> deleteMusicFile(String musicId) async {
+    await _ensureInitialized();
     final file = await getMusicFile(musicId);
     if (file != null) {
       await file.delete();
@@ -119,6 +130,7 @@ class FileService {
 
   // Background image operations
   Future<File> saveBackgroundFile(File sourceFile, String backgroundId) async {
+    await _ensureInitialized();
     final backgroundsDir = getBackgroundsDirectory();
     final extension = FileUtils.getFileExtension(sourceFile.path);
     final filename = 'bg_${backgroundId}$extension';
@@ -128,6 +140,7 @@ class FileService {
   }
 
   Future<File?> getBackgroundFile(String backgroundId) async {
+    await _ensureInitialized();
     final backgroundsDir = getBackgroundsDirectory();
     final supportedExtensions = FileUtils.supportedImageFormats;
     
@@ -143,6 +156,7 @@ class FileService {
   }
 
   Future<void> deleteBackgroundFile(String backgroundId) async {
+    await _ensureInitialized();
     final file = await getBackgroundFile(backgroundId);
     if (file != null) {
       await file.delete();
@@ -151,6 +165,7 @@ class FileService {
 
   // Cache operations
   Future<File> saveToCacheWithId(String cacheId, Uint8List data) async {
+    await _ensureInitialized();
     final cacheDir = getCacheDirectory();
     final filePath = path.join(cacheDir, cacheId);
     
@@ -168,6 +183,7 @@ class FileService {
   }
 
   Future<File?> getCachedFileById(String cacheId) async {
+    await _ensureInitialized();
     final cacheDir = getCacheDirectory();
     final filePath = path.join(cacheDir, cacheId);
     final file = File(filePath);
@@ -185,17 +201,20 @@ class FileService {
   }
 
   Future<void> clearCache() async {
+    await _ensureInitialized();
     final cacheDir = getCacheDirectory();
     await FileUtils.cleanupTempFiles(cacheDir);
   }
 
   Future<int> getCacheSize() async {
+    await _ensureInitialized();
     final cacheDir = getCacheDirectory();
     return await FileUtils.getDirectorySize(cacheDir);
   }
 
   // Temporary file operations
   Future<File> createTempFile(String prefix, String extension) async {
+    await _ensureInitialized();
     final tempDir = getTempDirectory();
     final filename = '${prefix}_${DateTime.now().millisecondsSinceEpoch}$extension';
     final filePath = path.join(tempDir, filename);
@@ -206,12 +225,14 @@ class FileService {
   }
 
   Future<void> cleanupTempFiles() async {
+    await _ensureInitialized();
     final tempDir = getTempDirectory();
     await FileUtils.cleanupTempFiles(tempDir);
   }
 
   // Asset download and caching
   Future<File> downloadAndCacheAsset(String url, String cacheId) async {
+    await _ensureInitialized();
     // Check if already cached
     final cachedFile = await getCachedFileById(cacheId);
     if (cachedFile != null) {
@@ -282,6 +303,7 @@ class FileService {
 
   // Storage usage
   Future<Map<String, dynamic>> getStorageUsage() async {
+    await _ensureInitialized();
     final booksSize = await FileUtils.getDirectorySize(getBooksDirectory());
     final musicSize = await FileUtils.getDirectorySize(getMusicDirectory());
     final backgroundsSize = await FileUtils.getDirectorySize(getBackgroundsDirectory());
@@ -308,6 +330,7 @@ class FileService {
 
   // Export/Import operations
   Future<File> exportData(String type, List<String> ids) async {
+    await _ensureInitialized();
     final tempDir = getTempDirectory();
     final exportFile = await createTempFile('export_$type', '.json');
     
@@ -353,7 +376,7 @@ class FileService {
   }
 
   Future<void> _ensureInitialized() async {
-    if (_appDocumentsPath.isEmpty) {
+    if (!_initialized) {
       await initialize();
     }
   }

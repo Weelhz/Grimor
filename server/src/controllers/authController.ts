@@ -81,11 +81,11 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response, next:
       data: {
         id: user.id,
         username: user.username,
-        full_name: user.full_name,
-        theme: user.theme,
-        dynamic_bg: user.dynamic_bg,
-        music_volume: user.music_volume,
-        mood_sensitivity: user.mood_sensitivity,
+        display_name: user.display_name,
+        email: user.email,
+        user_role: user.user_role,
+        avatar_url: user.avatar_url,
+        preferences: user.preferences,
         created_at: user.created_at
       }
     });
@@ -101,11 +101,9 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response, ne
     }
 
     const updateSchema = z.object({
-      full_name: z.string().max(100).optional(),
-      theme: z.enum(['light', 'dark']).optional(),
-      dynamic_bg: z.boolean().optional(),
-      music_volume: z.number().min(0).max(100).optional(),
-      mood_sensitivity: z.number().min(0.1).max(2.0).optional()
+      display_name: z.string().max(100).optional(),
+      avatar_url: z.string().url().optional(),
+      preferences: z.any().optional()
     });
 
     const validatedData = updateSchema.parse(req.body);
@@ -120,11 +118,11 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response, ne
       data: {
         id: updatedUser.id,
         username: updatedUser.username,
-        full_name: updatedUser.full_name,
-        theme: updatedUser.theme,
-        dynamic_bg: updatedUser.dynamic_bg,
-        music_volume: updatedUser.music_volume,
-        mood_sensitivity: updatedUser.mood_sensitivity
+        display_name: updatedUser.display_name,
+        email: updatedUser.email,
+        user_role: updatedUser.user_role,
+        avatar_url: updatedUser.avatar_url,
+        preferences: updatedUser.preferences
       }
     });
   } catch (error) {

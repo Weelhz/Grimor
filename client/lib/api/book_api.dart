@@ -5,7 +5,7 @@ import 'package:logger/logger.dart';
 import '../models/book.dart';
 
 class BookApi {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = 'http://localhost:3000/api';
   final Logger _logger = Logger();
 
   Future<List<Book>> getBooks({

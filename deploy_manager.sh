@@ -72,14 +72,30 @@ update_ubuntu_server() {
     
     # Build and copy server
     cd server
-    npm run build
+    if [ -f "package.json" ]; then
+        npm run build
+    else
+        echo "❌ Server package.json not found"
+        cd ..
+        exit 1
+    fi
     
     # Copy updated files
-    sudo cp -r dist/* /opt/bookphere/dist/
-    sudo chown -R bookuser:bookuser /opt/bookphere/dist
+    if [ -d "dist" ]; then
+        sudo cp -r dist/* /opt/bookphere/dist/
+        sudo chown -R bookuser:bookuser /opt/bookphere/dist
+    else
+        echo "❌ Build failed - dist directory not found"
+        cd ..
+        exit 1
+    fi
     
     # Restart server
-    sudo -u bookuser pm2 restart bookphere-server
+    if command -v pm2 &> /dev/null; then
+        sudo -u bookuser pm2 restart bookphere-server
+    else
+        echo "⚠️ PM2 not found - please restart server manually"
+    fi
     
     echo "✅ Server updated successfully"
     cd ..
@@ -136,12 +152,20 @@ build_android_apk() {
 build_windows_exe() {
     echo "🖥️ Building Windows EXE..."
     
-    if command -v cmd.exe &> /dev/null; then
-        # Running on Windows (WSL or Git Bash)
-        cmd.exe /c build_windows_exe.bat
+    if [ -f "build_windows_exe.bat" ]; then
+        if command -v cmd.exe &> /dev/null; then
+            # Running on Windows (WSL or Git Bash)
+            cmd.exe /c build_windows_exe.bat
+        elif command -v wine &> /dev/null; then
+            # Running on Linux with Wine
+            wine cmd /c build_windows_exe.bat
+        else
+            echo "❌ Windows build requires Windows environment or Wine"
+            echo "📋 Run build_windows_exe.bat on Windows system"
+            exit 1
+        fi
     else
-        echo "❌ Windows build requires Windows environment"
-        echo "📋 Run build_windows_exe.bat on Windows system"
+        echo "❌ Windows build script not found"
         exit 1
     fi
 }
@@ -152,42 +176,61 @@ test_all_components() {
     
     # Test server build
     echo "Testing server build..."
-    cd server
-    npm run build
-    echo "✅ Server builds successfully"
-    cd ..
+    if [ -d "server" ] && [ -f "server/package.json" ]; then
+        cd server
+        if npm run build; then
+            echo "✅ Server builds successfully"
+        else
+            echo "❌ Server build failed"
+        fi
+        cd ..
+    else
+        echo "❌ Server directory or package.json not found"
+    fi
     
     # Test web client build
     echo "Testing web client build..."
-    cd client
-    if command -v flutter &> /dev/null; then
-        flutter pub get
-        flutter analyze
-        echo "✅ Web client analysis passed"
+    if [ -d "client" ] && [ -f "client/pubspec.yaml" ]; then
+        cd client
+        if command -v flutter &> /dev/null; then
+            if flutter pub get && flutter analyze; then
+                echo "✅ Web client analysis passed"
+            else
+                echo "❌ Web client analysis failed"
+            fi
+        else
+            echo "⚠️ Flutter not available - skipping client tests"
+        fi
+        cd ..
     else
-        echo "⚠️ Flutter not available - skipping client tests"
+        echo "❌ Client directory or pubspec.yaml not found"
     fi
-    cd ..
     
     # Test database connection if available
     if [ -n "$DATABASE_URL" ]; then
         echo "Testing database connection..."
-        cd server
-        node -e "
-        const { Client } = require('pg');
-        const client = new Client(process.env.DATABASE_URL);
-        client.connect()
-        .then(() => {
-            console.log('✅ Database connection successful');
-            return client.query('SELECT 1');
-        })
-        .then(() => client.end())
-        .catch(err => {
-            console.log('❌ Database connection failed:', err.message);
-            process.exit(1);
-        });
-        "
-        cd ..
+        if [ -d "server" ]; then
+            cd server
+            if command -v node &> /dev/null; then
+                node -e "
+                const { Client } = require('pg');
+                const client = new Client(process.env.DATABASE_URL);
+                client.connect()
+                .then(() => {
+                    console.log('✅ Database connection successful');
+                    return client.query('SELECT 1');
+                })
+                .then(() => client.end())
+                .catch(err => {
+                    console.log('❌ Database connection failed:', err.message);
+                    process.exit(1);
+                });
+                " 2>/dev/null || echo "❌ Database connection test failed"
+            else
+                echo "❌ Node.js not available for database test"
+            fi
+            cd ..
+        fi
     else
         echo "⚠️ DATABASE_URL not set - skipping database test"
     fi
@@ -203,24 +246,36 @@ check_server_health() {
     server_url=${server_url:-http://localhost:3000}
     
     # Test API health endpoint
-    if curl -s --connect-timeout 5 "$server_url/api/health" > /dev/null; then
-        echo "✅ Server is responding"
-        
-        # Get detailed health info
-        response=$(curl -s "$server_url/api/health" 2>/dev/null)
-        echo "Health response: $response"
+    if command -v curl &> /dev/null; then
+        if curl -s --connect-timeout 5 "$server_url/api/health" > /dev/null 2>&1; then
+            echo "✅ Server is responding"
+            
+            # Get detailed health info
+            response=$(curl -s "$server_url/api/health" 2>/dev/null)
+            if [ -n "$response" ]; then
+                echo "Health response: $response"
+            fi
+        else
+            echo "❌ Server is not responding"
+            echo "📋 Troubleshooting:"
+            echo "   1. Check if server is running"
+            echo "   2. Verify URL and port"
+            echo "   3. Check firewall settings"
+        fi
     else
-        echo "❌ Server is not responding"
-        echo "📋 Troubleshooting:"
-        echo "   1. Check if server is running"
-        echo "   2. Verify URL and port"
-        echo "   3. Check firewall settings"
+        echo "❌ curl not available - cannot test server health"
     fi
     
     # Test WebSocket if wscat is available
     if command -v wscat &> /dev/null; then
         echo "Testing WebSocket..."
-        timeout 5s wscat -c "$server_url/socket.io/?EIO=4&transport=websocket" --close 2>/dev/null || echo "⚠️ WebSocket test incomplete"
+        if timeout 5s wscat -c "$server_url/socket.io/?EIO=4&transport=websocket" --close 2>/dev/null; then
+            echo "✅ WebSocket connection successful"
+        else
+            echo "⚠️ WebSocket test incomplete or failed"
+        fi
+    else
+        echo "⚠️ wscat not available - skipping WebSocket test"
     fi
 }
 
@@ -232,6 +287,15 @@ clean_all_builds() {
     if [ -d "server/dist" ]; then
         rm -rf server/dist
         echo "✅ Server dist cleaned"
+    fi
+    
+    # Clean server node_modules if requested
+    if [ -d "server/node_modules" ]; then
+        read -p "Clean server node_modules? (y/N): " clean_node_modules
+        if [ "$clean_node_modules" = "y" ] || [ "$clean_node_modules" = "Y" ]; then
+            rm -rf server/node_modules
+            echo "✅ Server node_modules cleaned"
+        fi
     fi
     
     # Clean web client
@@ -249,10 +313,13 @@ clean_all_builds() {
     done
     
     # Clean Flutter
-    if command -v flutter &> /dev/null; then
+    if command -v flutter &> /dev/null && [ -d "client" ]; then
         cd client
-        flutter clean > /dev/null 2>&1
-        echo "✅ Flutter cache cleaned"
+        if flutter clean > /dev/null 2>&1; then
+            echo "✅ Flutter cache cleaned"
+        else
+            echo "⚠️ Flutter clean failed"
+        fi
         cd ..
     fi
     
@@ -261,7 +328,11 @@ clean_all_builds() {
 
 # Main script execution
 main() {
-    check_prerequisites
+    # Check prerequisites with error handling
+    if ! check_prerequisites; then
+        echo "❌ Prerequisites check failed"
+        exit 1
+    fi
     
     while true; do
         show_menu
@@ -269,15 +340,15 @@ main() {
         echo ""
         
         case $choice in
-            1) deploy_ubuntu_server ;;
-            2) update_ubuntu_server ;;
-            3) build_web_client ;;
-            4) deploy_web_to_server ;;
-            5) build_android_apk ;;
-            6) build_windows_exe ;;
-            7) test_all_components ;;
-            8) check_server_health ;;
-            9) clean_all_builds ;;
+            1) deploy_ubuntu_server || echo "❌ Ubuntu server deployment failed" ;;
+            2) update_ubuntu_server || echo "❌ Ubuntu server update failed" ;;
+            3) build_web_client || echo "❌ Web client build failed" ;;
+            4) deploy_web_to_server || echo "❌ Web deployment failed" ;;
+            5) build_android_apk || echo "❌ Android APK build failed" ;;
+            6) build_windows_exe || echo "❌ Windows EXE build failed" ;;
+            7) test_all_components || echo "❌ Component testing failed" ;;
+            8) check_server_health || echo "❌ Health check failed" ;;
+            9) clean_all_builds || echo "❌ Build cleanup failed" ;;
             0) echo "👋 Goodbye!"; exit 0 ;;
             *) echo "❌ Invalid option. Please try again." ;;
         esac

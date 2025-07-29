@@ -6,7 +6,7 @@ import '../storage/secure_store.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthApi _authApi = AuthApi();
-  final SecureStore _secureStore;
+  final SecureStore _secureStore = SecureStore();
   final Logger _logger = Logger();
 
   User? _user;
@@ -18,7 +18,7 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
-  AuthProvider(this._secureStore) {
+  AuthProvider() {
     _checkAuthState();
   }
 

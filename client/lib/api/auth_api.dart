@@ -4,7 +4,7 @@ import 'package:logger/logger.dart';
 import '../models/user.dart';
 
 class AuthApi {
-  static const String baseUrl = 'http://localhost:5000/api';
+  static const String baseUrl = 'http://localhost:3000/api';
   final Logger _logger = Logger();
 
   Future<Map<String, dynamic>> login(String username, String password) async {

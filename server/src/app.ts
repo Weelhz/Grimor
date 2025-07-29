@@ -61,6 +61,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// API health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    service: 'BookSphere API'
+  });
+});
+
 // File serving endpoint with signed URLs
 app.get('/api/files/:token', async (req, res) => {
   try {

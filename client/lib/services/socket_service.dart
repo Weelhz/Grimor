@@ -3,7 +3,7 @@ import 'package:logger/logger.dart';
 import '../models/mood.dart';
 
 class SocketService {
-  static const String serverUrl = 'http://localhost:5000';
+  static const String serverUrl = 'http://localhost:3000';
   IO.Socket? _socket;
   final Logger _logger = Logger();
   

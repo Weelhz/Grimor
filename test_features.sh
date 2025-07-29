@@ -9,7 +9,7 @@ echo "📚 Book Sphere Feature Testing Script"
 echo "====================================="
 
 # Configuration
-SERVER_URL="http://localhost:5000"
+SERVER_URL="http://localhost:3000"
 API_BASE="$SERVER_URL/api"
 TEST_USER="testuser$(date +%s)"
 TEST_EMAIL="test@example.com"

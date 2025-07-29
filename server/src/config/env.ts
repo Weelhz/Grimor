@@ -6,7 +6,7 @@ config();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().default('5000').transform(Number),
+  PORT: z.string().default('3000').transform(Number),
   DATABASE_URL: z.string(),
   JWT_SECRET: z.string().default('your-secret-key-change-in-production'),
   JWT_REFRESH_SECRET: z.string().default('your-refresh-secret-key-change-in-production'),
