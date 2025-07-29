@@ -1,0 +1,412 @@
+# BookSphere Use Cases Documentation
+
+## Overview
+This document maps all possible user interactions and system behaviors to their corresponding implementation in the codebase. It serves as a reference for debugging, optimization, and feature development.
+
+## 1. User Authentication & Account Management
+
+### UC-001: User Registration
+**Description**: New user creates an account with customizable preferences
+**User Flow**: User enters username, password, and optional preferences (theme, music volume, etc.)
+**Implementation**:
+- Frontend: `client/lib/pages/register_page.dart`
+- API Endpoint: `POST /api/auth/register`
+- Controller: `server/src/controllers/authController.ts` → `register()`
+- Service: `server/src/services/authService.ts` → `registerUser()`
+- Model: `server/src/models/User.ts` → `createUser()`
+- Database: `users` table in PostgreSQL
+- Validation: Zod schema `registerSchema` in authController
+- Assets: User avatars stored in `server/uploads/avatars/`
+
+### UC-002: User Login
+**Description**: Existing user authenticates to access their account
+**User Flow**: User enters username/password, receives access and refresh tokens
+**Implementation**:
+- Frontend: `client/lib/pages/login_page.dart`
+- Provider: `client/lib/providers/auth_provider.dart` → `login()`
+- API: `client/lib/api/auth_api.dart` → `login()`
+- Endpoint: `POST /api/auth/login`
+- Controller: `server/src/controllers/authController.ts` → `login()`
+- Service: `server/src/services/authService.ts` → `loginUser()`
+- Storage: JWT tokens in `client/lib/storage/secure_store.dart`
+- Middleware: `server/src/middleware/auth.ts` → `authenticateToken()`
+
+### UC-003: Token Refresh
+**Description**: Automatic token renewal for continued session
+**User Flow**: Background process refreshes expired access tokens
+**Implementation**:
+- Frontend: `client/lib/providers/auth_provider.dart` → `refreshToken()`
+- API: `client/lib/api/auth_api.dart` → `refreshToken()`
+- Endpoint: `POST /api/auth/refresh`
+- Controller: `server/src/controllers/authController.ts` → `refreshToken()`
+- Service: `server/src/services/authService.ts` → `refreshAccessToken()`
+- Database: `refresh_tokens` table
+- Utils: `server/src/utils/token.ts` for JWT operations
+
+### UC-004: Profile Management
+**Description**: User views and updates their profile information
+**User Flow**: User accesses settings, modifies preferences, saves changes
+**Implementation**:
+- Frontend: `client/lib/pages/settings_page.dart`
+- Provider: `client/lib/providers/settings_provider.dart`
+- API: `GET/PUT /api/auth/profile`
+- Controller: `server/src/controllers/authController.ts` → `getProfile()`, `updateProfile()`
+- Model: `server/src/models/User.ts` → `updateUser()`
+- Storage: Local preferences in `client/lib/storage/local_store.dart`
+
+## 2. Book Management
+
+### UC-005: Book Upload
+**Description**: User uploads a book file (PDF, EPUB, TXT)
+**User Flow**: User selects file, uploads with metadata, file is processed and stored
+**Implementation**:
+- Frontend: `client/lib/components/upload_dialog.dart`
+- Provider: `client/lib/providers/book_provider.dart` → `uploadBook()`
+- API: `client/lib/api/book_api.dart` → `uploadBook()`
+- Endpoint: `POST /api/books/upload`
+- Controller: `server/src/controllers/bookController.ts` → `uploadBook()`
+- Service: `server/src/services/bookService.ts` → `processBookUpload()`
+- Middleware: `multer` configuration in `server/src/routes/bookRoutes.ts`
+- Storage: Files in `server/uploads/books/`
+- Database: `books` table
+- Utils: `server/src/utils/fileUtils.ts` for file validation
+
+### UC-006: Book Library Browsing
+**Description**: User views their book collection with filtering and search
+**User Flow**: User navigates to library, applies filters, searches titles/authors
+**Implementation**:
+- Frontend: `client/lib/pages/library_page.dart`
+- Provider: `client/lib/providers/book_provider.dart` → `getBooks()`, `searchBooks()`
+- API: `client/lib/api/book_api.dart` → `getBooks()`
+- Endpoint: `GET /api/books?filter=...&search=...`
+- Controller: `server/src/controllers/bookController.ts` → `getBooks()`
+- Service: `server/src/services/bookService.ts` → `getUserBooks()`
+- Database: Complex queries on `books` table with indexes
+- Cache: `client/lib/services/cache_service.dart` for offline access
+
+### UC-007: Book Reading
+**Description**: User opens a book and reads with mood-based experience
+**User Flow**: User selects book, opens reader, experiences dynamic mood changes
+**Implementation**:
+- Frontend: `client/lib/pages/reader_page.dart`
+- Components: `client/lib/components/reader/` (pdf_reader.dart, epub_reader.dart, etc.)
+- Provider: `client/lib/providers/book_provider.dart` → `openBook()`
+- WebSocket: Real-time mood triggers via `client/lib/services/socket_service.dart`
+- Progress Tracking: Continuous updates to reading position
+- Mood Engine: `client/lib/utils/mood_utils.dart` for mood detection
+- Audio: `just_audio` package for background music
+
+### UC-008: Reading Progress Sync
+**Description**: Reading progress syncs across devices in real-time
+**User Flow**: User reads on one device, progress appears on other devices
+**Implementation**:
+- Frontend: `client/lib/providers/sync_provider.dart`
+- WebSocket Events: `progress:update` in `server/src/websocket/events.ts`
+- Handler: `server/src/websocket/handlers/progressHandler.ts`
+- Database: `reading_progress` table
+- Offline: Delta sync in `client/lib/services/sync_service.dart`
+- Storage: Local cache in `client/lib/storage/local_store.dart`
+
+## 3. Mood System & Audio-Visual Experience
+
+### UC-009: Automatic Mood Detection
+**Description**: System detects reading context and triggers mood changes
+**User Flow**: As user reads, mood automatically changes based on content, time, progress
+**Implementation**:
+- Frontend: `client/lib/utils/mood_utils.dart` → mood detection algorithms
+- Provider: `client/lib/providers/mood_provider.dart`
+- WebSocket: `mood:trigger` events from server
+- Server: `server/src/services/moodService.ts` → `detectMoodChange()`
+- Database: `mood_triggers` table with conditions
+- Assets: Background images in `server/uploads/backgrounds/`
+- Audio: Music tracks in `server/uploads/music/`
+
+### UC-010: Manual Mood Selection
+**Description**: User manually selects a mood for their reading session
+**User Flow**: User opens mood selector, chooses mood, environment changes
+**Implementation**:
+- Frontend: Mood selector UI in reader
+- Provider: `client/lib/providers/mood_provider.dart` → `setMood()`
+- API: `client/lib/api/mood_api.dart` → `setMood()`
+- Endpoint: `POST /api/mood/set`
+- Controller: `server/src/controllers/moodController.ts` → `setMood()`
+- Database: `mood_types` table with predefined moods
+- WebSocket: Broadcast mood change to other devices
+
+### UC-011: Music Playlist Management
+**Description**: User creates and manages music playlists for different moods
+**User Flow**: User uploads music, creates playlists, assigns to moods
+**Implementation**:
+- Frontend: `client/lib/pages/playlist_page.dart`
+- Provider: `client/lib/providers/music_provider.dart`
+- API: `client/lib/api/music_api.dart`
+- Endpoints: `/api/music/` and `/api/playlists/`
+- Controllers: `server/src/controllers/musicController.ts`, `playlistController.ts`
+- Database: `music_tracks` and `playlists` tables
+- Storage: Music files in `server/uploads/music/`
+- Audio: Playback via `just_audio` package
+
+### UC-012: Background Image Management
+**Description**: User uploads and manages background images for mood themes
+**User Flow**: User uploads images, assigns to moods, sees dynamic backgrounds
+**Implementation**:
+- Frontend: Background image uploader in settings
+- Provider: `client/lib/providers/mood_provider.dart`
+- Storage: Images in `server/uploads/backgrounds/`
+- Database: `background_images` table
+- Service: `server/src/services/signedUrlService.ts` for secure access
+- Display: Dynamic background changes in reader
+
+## 4. Synchronization & Offline Support
+
+### UC-013: Multi-Device Sync
+**Description**: User's data syncs seamlessly across all devices
+**User Flow**: User makes changes on one device, sees updates on others
+**Implementation**:
+- Frontend: `client/lib/providers/sync_provider.dart`
+- Service: `client/lib/services/sync_service.dart`
+- WebSocket: Real-time sync events
+- API: `client/lib/api/sync_api.dart`
+- Endpoints: `/api/sync/` for delta synchronization
+- Controller: `server/src/controllers/syncController.ts`
+- Service: `server/src/services/syncService.ts`
+- Database: All tables with `updated_at` timestamps
+- Conflict Resolution: Last-write-wins with merge strategies
+
+### UC-014: Offline Reading
+**Description**: User reads books without internet connection
+**User Flow**: User downloads books, reads offline, syncs when reconnected
+**Implementation**:
+- Frontend: Offline detection via `connectivity_plus`
+- Storage: Local book storage via `client/lib/services/file_service.dart`
+- Cache: Comprehensive caching in `client/lib/services/cache_service.dart`
+- Database: Local SQLite via `sqflite` package
+- Sync: Queue operations for later sync
+- UI: Offline banner via `client/lib/components/offline_banner.dart`
+
+### UC-015: Data Recovery
+**Description**: System recovers from sync conflicts and data loss
+**User Flow**: Automatic recovery when conflicts or errors occur
+**Implementation**:
+- Frontend: `client/lib/services/sync_service.dart` → recovery methods
+- WebSocket: `sync:recover` events
+- Server: `server/src/services/syncService.ts` → conflict resolution
+- Database: Audit trail in `audit_log` table
+- Backup: Automatic data backup during sync
+
+## 5. File Management & Security
+
+### UC-016: Secure File Access
+**Description**: Files are accessed via signed URLs for security
+**User Flow**: User requests file, gets temporary signed URL, accesses content
+**Implementation**:
+- Service: `server/src/services/signedUrlService.ts`
+- Endpoints: `/api/files/signed-url/:type/:id`
+- Security: Time-limited URLs with hash verification
+- Storage: Files organized by type in `server/uploads/`
+- Cleanup: Automatic cleanup of expired URLs
+
+### UC-017: File Upload Validation
+**Description**: System validates file types, sizes, and content
+**User Flow**: User uploads file, system validates, accepts or rejects
+**Implementation**:
+- Middleware: File validation in `server/src/utils/fileUtils.ts`
+- Limits: Size limits in `server/src/routes/` route configurations
+- Types: MIME type validation for books, music, images
+- Security: Virus scanning (configurable)
+- Storage: Temporary uploads in `server/uploads/temp/`
+
+## 6. Real-Time Features
+
+### UC-018: WebSocket Communication
+**Description**: Real-time communication for live features
+**User Flow**: Instant updates for mood changes, sync, user presence
+**Implementation**:
+- Frontend: `client/lib/services/socket_service.dart`
+- Server: `server/src/websocket/socketServer.ts`
+- Events: Defined in `server/src/websocket/events.ts`
+- Handlers: `server/src/websocket/handlers/` for different event types
+- Rooms: Book-specific rooms for collaborative features
+- Auth: Socket authentication via JWT tokens
+
+### UC-019: Live Mood Triggers
+**Description**: Mood changes trigger immediately across all user devices
+**User Flow**: Mood change on one device instantly affects all others
+**Implementation**:
+- WebSocket: `mood:trigger` events
+- Handler: `server/src/websocket/handlers/moodHandler.ts`
+- Broadcast: Room-based broadcasting to user's devices
+- Frontend: Immediate UI updates via providers
+- Transitions: Smooth visual/audio transitions
+
+## 7. Performance & Optimization
+
+### UC-020: Image Optimization
+**Description**: Images are optimized for different screen sizes and quality
+**User Flow**: User uploads image, system creates optimized versions
+**Implementation**:
+- Utils: `client/lib/utils/file_utils.dart` for compression
+- Server: Image processing in `server/src/services/`
+- Storage: Multiple resolutions stored
+- Cache: Cached images for performance
+- Loading: Progressive loading with placeholders
+
+### UC-021: Content Preloading
+**Description**: System preloads content for smooth user experience
+**User Flow**: Next chapters, images, music preload while user reads
+**Implementation**:
+- Frontend: `client/lib/components/preload_dialog.dart`
+- Service: `client/lib/services/cache_service.dart` → preload strategies
+- API: Batch loading endpoints
+- Storage: Intelligent cache management
+- Priority: User behavior-based preloading
+
+### UC-022: Database Optimization
+**Description**: Database queries are optimized for performance
+**User Flow**: Fast responses even with large datasets
+**Implementation**:
+- Database: Indexes defined in `server/database/setup.sql`
+- Queries: Optimized queries in model files
+- Pooling: Connection pooling configuration
+- Caching: Query result caching
+- Monitoring: Performance logging
+
+## 8. Security & Privacy
+
+### UC-023: Rate Limiting
+**Description**: API endpoints are protected from abuse
+**User Flow**: Normal usage unaffected, excessive requests blocked
+**Implementation**:
+- Middleware: `server/src/middleware/rateLimiter.ts`
+- Configuration: Different limits for different endpoints
+- Storage: In-memory rate limit tracking
+- Headers: Rate limit info in response headers
+
+### UC-024: Input Validation
+**Description**: All user inputs are validated and sanitized
+**User Flow**: Invalid inputs rejected with clear error messages
+**Implementation**:
+- Middleware: `server/src/middleware/validateInput.ts`
+- Schemas: Zod schemas in controllers
+- Frontend: Client-side validation in forms
+- Sanitization: SQL injection prevention
+- XSS: Cross-site scripting prevention
+
+### UC-025: Audit Logging
+**Description**: All user actions are logged for security and debugging
+**User Flow**: Transparent to user, logs maintained for administrators
+**Implementation**:
+- Model: `server/src/models/AuditLog.ts`
+- Database: `audit_log` table
+- Middleware: Automatic logging of sensitive operations
+- Privacy: PII data handling compliance
+- Retention: Configurable log retention policies
+
+## 9. Platform-Specific Features
+
+### UC-026: Android Permissions
+**Description**: Android app manages permissions for file access and notifications
+**User Flow**: App requests permissions, user grants, features unlock
+**Implementation**:
+- Permissions: Defined in `client/android/app/src/main/AndroidManifest.xml`
+- Handler: `permission_handler` package
+- Service: `client/lib/services/platform_service.dart`
+- Storage: External storage access for downloads
+- Notifications: Push notifications for sync events
+
+### UC-027: Windows Desktop Integration
+**Description**: Windows app integrates with desktop environment
+**User Flow**: File associations, notifications, system tray
+**Implementation**:
+- Configuration: `client/windows/` directory
+- File Types: Book file associations
+- Notifications: Native Windows notifications
+- Storage: Windows-specific storage paths
+- Launcher: Smart launcher with server detection
+
+### UC-028: Web PWA Features
+**Description**: Web version works as Progressive Web App
+**User Flow**: Install prompt, offline capability, app-like experience
+**Implementation**:
+- Manifest: `client/web/manifest.json`
+- Service Worker: Offline caching
+- Installation: Browser install prompts
+- Offline: Full offline reading capability
+- Storage: Browser local storage and IndexedDB
+
+## 10. Configuration & Deployment
+
+### UC-029: Environment Configuration
+**Description**: Application adapts to different deployment environments
+**User Flow**: Transparent to user, different configs for dev/staging/prod
+**Implementation**:
+- Server: `server/src/config/production.ts`
+- Client: `client/lib/config/production_config.dart`
+- Environment: `.env` files for different environments
+- Features: Feature flags for platform-specific capabilities
+- URLs: Automatic server URL detection
+
+### UC-030: Health Monitoring
+**Description**: System monitors its own health and performance
+**User Flow**: Transparent to user, alerts for administrators
+**Implementation**:
+- Endpoint: `/api/health` for health checks
+- Monitoring: Database, memory, disk space checks
+- Logging: Comprehensive logging via Winston
+- Metrics: Performance metrics collection
+- Alerts: Configurable alerting for issues
+
+## Error Handling & Recovery
+
+### Error Scenarios Mapped to Code:
+- **Network Errors**: `client/lib/api/` error handling
+- **File Upload Errors**: `server/src/middleware/errorHandler.ts`
+- **Authentication Errors**: `server/src/middleware/auth.ts`
+- **Database Errors**: Connection pooling and retry logic
+- **WebSocket Errors**: Reconnection logic in socket service
+- **Sync Conflicts**: Resolution in sync service
+- **Storage Errors**: Fallback to alternative storage
+
+## Testing & Debugging
+
+### Test Coverage Mapping:
+- **API Tests**: `server/tests/integration/`
+- **Unit Tests**: Individual component tests
+- **WebSocket Tests**: Real-time feature testing
+- **File Upload Tests**: Multipart upload testing
+- **Security Tests**: Authentication and authorization
+- **Performance Tests**: Load testing scenarios
+
+## Asset Management
+
+### Asset Types and Locations:
+- **Book Files**: `server/uploads/books/` (PDF, EPUB, TXT)
+- **Music Files**: `server/uploads/music/` (MP3, WAV, OGG)
+- **Background Images**: `server/uploads/backgrounds/` (JPG, PNG, WEBP)
+- **User Avatars**: `server/uploads/avatars/` (JPG, PNG)
+- **Temporary Files**: `server/uploads/temp/` (Processing queue)
+- **Client Assets**: `client/assets/` (Icons, default images)
+
+---
+
+## Usage for Debugging
+
+When debugging issues:
+1. Identify the use case from user report
+2. Follow the implementation chain from frontend to backend
+3. Check logs at each layer (client, API, database, WebSocket)
+4. Verify file permissions and storage paths
+5. Test with curl commands for API issues
+6. Use WebSocket debugging tools for real-time issues
+
+## Usage for Optimization
+
+When optimizing performance:
+1. Identify bottlenecks using the implementation mapping
+2. Focus on database queries, file operations, and network calls
+3. Implement caching at appropriate layers
+4. Optimize asset delivery and preloading
+5. Monitor WebSocket event frequency
+6. Profile client-side rendering performance
+
+This document should be updated as new features are added or existing implementations change.

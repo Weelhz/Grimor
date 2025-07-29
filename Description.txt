@@ -1,0 +1,306 @@
+Project Name: Book Sphere
+
+1) Purpose
+
+A cross-platform reading app (Windows, Android, Web) that auto-preloads every asset—full book text, mood-map data, and all associated music—onto the device or browser before you crack open page 1. Once cached, the app dynamically adapts background visuals and music tempo in real time based on book-embedded “mood” markers and your reading progress.
+No buffering. No surprises. Just pure, seamless immersion.
+
+2) Core Features
+
+2.1 General
+
+- Clients: Windows, Android, Web (all in a single Flutter codebase)
+- Server: Node.js/Express with WebSockets (socket.io), PostgreSQL, and S3-style file store
+- Preload & Cache: full book text, mood-map JSON, all music tracks—downloaded & stored locally/browser-storage before session start
+- Live Sync: WebSockets for bidirectional “progress ↔ mood trigger” updates (no REST polling)
+- Security: JWT + bcrypt for auth; HTTPS everywhere; signed, time-limited URLs for asset streams
+- Offline Mode: read, listen, and experience full dynamic AV environment offline; automatic delta-sync when back online
+
+2.2 User Roles
+
+- Reader:
+  Browse library, pick books or curated genre-playlists
+  Adjust “mood sensitivity” (scale 0.1–2.0)
+  Read with live AV feedback
+
+- Creator (all Reader rights, plus):
+  Upload books (PDF, EPUB, TXT)
+  Define mood maps (chapter + fractional-page markers)
+  Attach background images & import music
+  Set transition types: `fade`, `crossfade`, or `jump`
+
+3) Database Schema
+
+1. Reference tables
+
+CREATE TABLE MoodReference (
+  id SERIAL PRIMARY KEY,
+  mood_name VARCHAR(50) UNIQUE NOT NULL,
+  tempo_electronic INT NOT NULL,
+  tempo_classic    INT NOT NULL,
+  tempo_lofi       INT NOT NULL,
+  tempo_custom     INT      -- 0 = use default
+);
+
+CREATE TABLE Background (
+  id              SERIAL PRIMARY KEY,
+  mood_id         INT REFERENCES MoodReference(id) ON DELETE CASCADE,
+  background_path TEXT NOT NULL
+);
+
+CREATE TABLE Music (
+  id            SERIAL PRIMARY KEY,
+  title         VARCHAR(100) NOT NULL,
+  genre         VARCHAR(50),
+  filepath      TEXT NOT NULL,
+  is_public     BOOLEAN DEFAULT TRUE,
+  initial_tempo INT NOT NULL
+);
+
+2. Core entities
+
+CREATE TABLE Users (
+  id               SERIAL PRIMARY KEY,
+  username         VARCHAR(50) UNIQUE NOT NULL,
+  full_name        VARCHAR(100),
+  password_hash    TEXT NOT NULL,
+  theme            VARCHAR(20) DEFAULT 'light',
+  dynamic_bg       BOOLEAN DEFAULT TRUE,
+  music_volume     INT DEFAULT 70,
+  mood_sensitivity FLOAT DEFAULT 1.0
+);
+
+CREATE TABLE Books (
+  id         SERIAL PRIMARY KEY,
+  creator_id INT REFERENCES Users(id) ON DELETE SET NULL,
+  title      VARCHAR(200) NOT NULL,
+  filepath   TEXT NOT NULL,
+  uploaded_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE Presets (
+  id            SERIAL PRIMARY KEY,
+  creator_id    INT REFERENCES Users(id) ON DELETE CASCADE,
+  preset_name   VARCHAR(100) NOT NULL,
+  book_id       INT REFERENCES Books(id) ON DELETE CASCADE
+);
+
+CREATE TABLE MoodMap (
+  id               SERIAL PRIMARY KEY,
+  preset_id        INT REFERENCES Presets(id) ON DELETE CASCADE,
+  chapter          INT NOT NULL,
+  page_fraction    FLOAT NOT NULL CHECK(page_fraction BETWEEN 0 AND 1),
+  mood_id          INT REFERENCES MoodReference(id),
+  background_id    INT REFERENCES Background(id),
+  transition_type  VARCHAR(20) DEFAULT 'fade'
+);
+
+CREATE TABLE UserPlaylist (
+  id      SERIAL PRIMARY KEY,
+  user_id INT REFERENCES Users(id) ON DELETE CASCADE,
+  name    VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE PlaylistTracks (
+  id           SERIAL PRIMARY KEY,
+  playlist_id  INT REFERENCES UserPlaylist(id) ON DELETE CASCADE,
+  music_id     INT REFERENCES Music(id) ON DELETE CASCADE,
+  track_order  INT NOT NULL
+);
+
+4) Architecture Overview
+
+4.1 Server (Ubuntu Linux)
+
+Stack:
+- Nginx: reverse proxy + static asset host
+- Express + socket.io: REST + WebSockets
+- PostgreSQL: relational store
+- File storage: Local disk at first
+- Auth: JWT with short W-day expiry + refresh
+- Rate-limiting: per-endpoint (API) & per-socket (events)
+
+Responsibilities:
+
+1. Auth: `/api/auth/login` & `/api/auth/register`
+2. Books & Presets: CRUD endpoints (`/api/books`, `/api/presets`, `/api/moodmap`)
+3. Music & Playlists: `/api/music`, `/api/playlists`
+4. Signed URLs: ephemeral links for large file downloads
+5. WebSocket:
+  Client subscribes to `book:{bookId}:progress`
+  Server pushes `{mood, bgImageUrl, tempo}` whenever progress crosses a marker (scaled by sensitivity)
+
+6. Offline Sync: client caches deltas; on reconnect, client posts missing events to `/api/sync`
+
+4.2 Client (Flutter)
+
+On First Open (per book):
+
+  1. Fetch book metadata + mood map JSON + music index
+  2. Download all assets in parallel (with progress bar)
+  3. Cache to local storage / IndexedDB (Web)
+
+Reader UI:
+- E-reader widget with fractional-page tracking
+- Listens on socket for mood triggers
+- BackgroundRenderer: fades/crossfades between images
+- MusicPlayer: tempo modulation + seamless crossfades
+- Settings: theme toggle, volume, dynamic BG toggle, mood sensitivity slider
+- Offline: use cached assets; queue updates for later sync
+
+5) Security & Data Handling
+
+- TLS everywhere (Let’s Encrypt)
+- Password hashing
+- JW: 15 min access tokens + 7 day refresh tokens, stored HttpOnly
+- Signed URLs : 2 min expiry on streaming assets
+- Input validation : Zod on both client & server
+- Rate limiting: Express-rate-limiter and socket-rate-limiter
+- Audit logs: immutable write-only table for critical ops
+
+
+6) Code Layout
+
+6.1 Server (TypeScript + Express)
+
+/server
+├── src/
+│   ├── app.ts                  # Express app config (middlewares, routes mount)
+│   ├── server.ts               # Entry point, starts HTTP + WebSocket server
+│   ├── controllers/            # Request/response logic per entity
+│   │   ├── authController.ts
+│   │   ├── bookController.ts
+│   │   ├── musicController.ts
+│   │   ├── moodController.ts
+│   │   ├── playlistController.ts
+│   │   └── syncController.ts
+│   ├── routes/                 # Express routers grouped per resource
+│   │   ├── authRoutes.ts
+│   │   ├── bookRoutes.ts
+│   │   ├── musicRoutes.ts
+│   │   ├── presetRoutes.ts
+│   │   ├── playlistRoutes.ts
+│   │   └── syncRoutes.ts
+│   ├── middleware/
+│   │   ├── auth.ts             # JWT verifier middleware
+│   │   ├── errorHandler.ts     # Global error catcher
+│   │   ├── rateLimiter.ts      # API & socket-level throttling
+│   │   └── validateInput.ts    # Zod-based input schema validation
+│   ├── models/                 # DB model definitions (via Prisma/TypeORM/Knex/pg)
+│   │   ├── User.ts
+│   │   ├── Book.ts
+│   │   ├── Preset.ts
+│   │   ├── MoodMap.ts
+│   │   ├── Music.ts
+│   │   ├── Playlist.ts
+│   │   └── AuditLog.ts
+│   ├── services/               # Core logic for syncing, mood mapping, etc.
+│   │   ├── authService.ts
+│   │   ├── bookService.ts
+│   │   ├── moodService.ts
+│   │   ├── musicService.ts
+│   │   ├── syncService.ts
+│   │   └── signedUrlService.ts
+│   ├── websocket/              # Socket.io implementation & handlers
+│   │   ├── socketServer.ts     # Initializes socket.io & middleware
+│   │   ├── events.ts           # All event types & schema
+│   │   └── handlers/           
+│   │       ├── progressHandler.ts
+│   │       ├── moodHandler.ts
+│   │       └── syncHandler.ts
+│   └── utils/
+│       ├── logger.ts           # Winston/pino based logging
+│       ├── hash.ts             # bcrypt helpers
+│       ├── token.ts            # JWT signer/verifier
+│       └── fileUtils.ts        # File stream + validation helpers
+├── config/
+│   ├── db.ts                   # PG Pool or ORM config
+│   ├── env.ts                  # dotenv wrapper + runtime validation
+│   ├── awsS3.ts                # S3-compatible SDK setup
+│   └── rateLimitConfig.ts
+└── tests/
+    └── integration/           # Supertest + Jest tests for full flow
+
+6.2 Client (Flutter)
+
+/client
+├── lib/
+│   ├── main.dart               # App entry, root theme & routing
+│   ├── app.dart                # MaterialApp setup, navigation, global providers
+│   ├── api/                    # Backend integration layer
+│   │   ├── auth_api.dart
+│   │   ├── book_api.dart
+│   │   ├── music_api.dart
+│   │   ├── mood_api.dart
+│   │   └── sync_api.dart
+│   ├── models/                 # DTOs for client-side use
+│   │   ├── book.dart
+│   │   ├── mood.dart
+│   │   ├── music.dart
+│   │   ├── preset.dart
+│   │   └── user.dart
+│   ├── providers/              # State management (Riverpod or Provider)
+│   │   ├── auth_provider.dart
+│   │   ├── book_provider.dart
+│   │   ├── mood_provider.dart
+│   │   ├── music_provider.dart
+│   │   ├── sync_provider.dart
+│   │   └── settings_provider.dart
+│   ├── components/             # Reusable widgets
+│   │   ├── reader/             
+│   │   │   ├── reader_page.dart
+│   │   │   ├── page_tracker.dart
+│   │   │   └── mood_overlay.dart
+│   │   ├── music_player.dart   # Background music engine
+│   │   ├── bg_renderer.dart    # Visual background transitions
+│   │   ├── preload_dialog.dart
+│   │   └── offline_banner.dart
+│   ├── pages/                  # UI screens
+│   │   ├── login_page.dart
+│   │   ├── home_page.dart
+│   │   ├── settings_page.dart
+│   │   ├── library_page.dart
+│   │   └── playlist_page.dart
+│   ├── services/               # Caching, socket, file I/O
+│   │   ├── socket_service.dart
+│   │   ├── cache_service.dart
+│   │   ├── file_service.dart
+│   │   └── sync_service.dart
+│   ├── storage/                # Local/secure storage abstraction
+│   │   ├── local_store.dart
+│   │   └── secure_store.dart
+│   ├── utils/                  # Helpers
+│   │   ├── tempo_utils.dart
+│   │   ├── mood_utils.dart
+│   │   ├── file_utils.dart
+│   │   └── theme_utils.dart
+│   └── themes/                 # App-wide themes, fonts
+│       ├── light_theme.dart
+│       ├── dark_theme.dart
+│       └── typography.dart
+├── assets/
+│   ├── images/
+│   └── music/
+├── test/
+│   ├── widget/
+│   └── integration/
+└── web/
+    └── index.html              # Flutter web entry
+
+7) Feature Flow
+
+1. Launch -> Auth (login/register) -> Home
+2. Home menu:
+  Library (all books; “Upload” for Creators)
+  Playlists (view/manage cached music)
+  Settings (theme, volume, dynamic BG, mood sensitivity)
+3. Select Book -> begin one-time preload -> open Reader UI
+4. At runtime:
+  Reader streams fractional progress to server
+  Server computes scaled mood events -> pushes back `{mood, imageURL, tempo}`
+  Client applies transitions instantly, all from local cache
+
+8) Next-Gen Considerations
+
+AR/VR integration: imagine 360° environments changing with the story
+AI–generated ambience: dynamically compose custom tracks per reader taste
